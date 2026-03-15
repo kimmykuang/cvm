@@ -5,7 +5,7 @@ Thank you for your interest in contributing!
 ## Development Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/cvm.git
+git clone https://github.com/kimmykuang/cvm.git
 cd cvm
 ```
 

@@ -34,14 +34,14 @@ cvm lets you manage multiple versions and switch between them seamlessly.
 ### Quick Install
 
 ```bash
-curl -o- https://raw.githubusercontent.com/YOUR_USERNAME/cvm/main/install.sh | bash
+curl -o- https://raw.githubusercontent.com/kimmykuang/cvm/main/install.sh | bash
 # Then restart your shell or run: source ~/.zshrc
 ```
 
 ### Manual Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/cvm.git ~/.cvm-repo
+git clone https://github.com/kimmykuang/cvm.git ~/.cvm-repo
 cd ~/.cvm-repo
 chmod +x cvm.sh
 

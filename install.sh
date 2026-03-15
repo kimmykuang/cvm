@@ -37,7 +37,7 @@ if [ -d "$CVM_DIR" ]; then
     echo "Updated cvm to latest version."
 else
     echo "Cloning cvm repository..."
-    git clone https://github.com/YOUR_USERNAME/cvm.git "$CVM_DIR"
+    git clone https://github.com/kimmykuang/cvm.git "$CVM_DIR"
     echo "Cloned cvm repository."
 fi
 
@@ -117,5 +117,5 @@ echo "  4. Verify installation:"
 echo "     claude --version"
 echo ""
 echo "For more information, visit:"
-echo "  https://github.com/YOUR_USERNAME/cvm"
+echo "  https://github.com/kimmykuang/cvm"
 echo ""

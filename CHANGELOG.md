@@ -27,4 +27,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Automatic directory initialization
 - PATH configuration warnings
 
-[1.0.0]: https://github.com/YOUR_USERNAME/cvm/releases/tag/v1.0.0
+[1.0.0]: https://github.com/kimmykuang/cvm/releases/tag/v1.0.0

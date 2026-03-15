@@ -363,7 +363,7 @@ Integration with cc-switch:
   2. Create provider aliases: cvm alias provider-a 2.1.71
   3. Switch before using provider: cvm use provider-a
 
-Documentation: https://github.com/<your-username>/cvm
+Documentation: https://github.com/kimmykuang/cvm
 HELP_EOF
 }
 
