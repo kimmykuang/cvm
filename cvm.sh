@@ -100,8 +100,12 @@ cvm_install() {
   cvm_echo "Installing Claude CLI version $version..."
 
   mkdir -p "$version_dir"
-  local temp_dir=$(mktemp -d)
-  cd "$temp_dir"
+  local temp_dir
+  temp_dir=$(mktemp -d) || { cvm_error "Failed to create temp directory"; return 1; }
+  cd "$temp_dir" || { cvm_error "Failed to enter temp directory"; rm -rf "$temp_dir"; return 1; }
+
+  # Add trap for cleanup
+  trap 'cd - > /dev/null 2>&1; rm -rf "$temp_dir"' EXIT INT TERM
 
   cat > package.json << EOF_JSON
 {
@@ -120,6 +124,7 @@ EOF_JSON
     chmod +x "$version_dir/bin/claude"
 
     cvm_echo "Successfully installed Claude CLI $version"
+    trap - EXIT INT TERM
     cd - > /dev/null
     rm -rf "$temp_dir"
     return 0
@@ -127,6 +132,7 @@ EOF_JSON
     cvm_error "Failed to install version $version"
     cvm_error "Check that version exists: npm view @anthropic-ai/claude-code versions"
     rm -rf "$version_dir"
+    trap - EXIT INT TERM
     cd - > /dev/null
     rm -rf "$temp_dir"
     return 1
@@ -355,7 +361,7 @@ Integration with cc-switch:
   2. Create provider aliases: cvm alias provider-a 2.1.71
   3. Switch before using provider: cvm use provider-a
 
-Documentation: https://github.com/YOUR_USERNAME/cvm
+Documentation: https://github.com/<your-username>/cvm
 HELP_EOF
 }
 
