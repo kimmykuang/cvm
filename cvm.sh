@@ -162,6 +162,7 @@ cvm_use() {
     return 1
   fi
 
+  mkdir -p "$CVM_BIN_DIR"
   rm -f "$CVM_BIN_DIR/claude"
   ln -sf "$version_dir/bin/claude" "$CVM_BIN_DIR/claude"
 
@@ -258,6 +259,7 @@ cvm_alias() {
     return 1
   fi
 
+  mkdir -p "$CVM_ALIAS_DIR"
   local alias_file="$CVM_ALIAS_DIR/$alias_name"
   echo "$version" > "$alias_file"
 
