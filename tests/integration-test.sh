@@ -20,7 +20,8 @@ trap cleanup EXIT
 mkdir -p "$TEST_CVM_DIR"
 export PATH="$TEST_CVM_DIR/bin:$PATH"
 
-CVM_CMD="$(pwd)/cvm.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CVM_CMD="$SCRIPT_DIR/../cvm.sh"
 
 echo "1. Testing help command..."
 $CVM_CMD help > /dev/null
@@ -54,7 +55,7 @@ else
 fi
 
 echo "5. Verify claude executable works..."
-if $TEST_CVM_DIR/bin/claude --version > /dev/null 2>&1; then
+if "$TEST_CVM_DIR/bin/claude" --version > /dev/null 2>&1; then
   echo "   ✓ Claude executable works"
 else
   echo "   ✗ Claude executable failed"
