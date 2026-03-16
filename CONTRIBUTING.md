@@ -55,6 +55,97 @@ Before submitting a PR:
 3. Test error cases (invalid input, missing versions)
 4. Verify on both bash and zsh if possible
 
+### Cross-platform Testing
+
+#### Unix (macOS, Linux, WSL)
+
+```bash
+# Run integration tests
+./tests/integration-test.sh
+
+# Manual testing
+./cvm.sh help
+./cvm.sh install 2.1.63
+./cvm.sh list
+```
+
+#### Windows
+
+```powershell
+# Run integration tests
+.\tests\integration-test.ps1
+
+# Manual testing
+.\cvm.ps1 help
+.\cvm.ps1 install 2.1.63
+.\cvm.ps1 list
+```
+
+**Testing Checklist:**
+- [ ] Bash tests pass on macOS/Linux
+- [ ] PowerShell tests pass on Windows 10/11
+- [ ] install.sh detects OS correctly
+- [ ] Git Bash redirects to PowerShell on Windows
+- [ ] WSL uses bash version (not PowerShell)
+- [ ] Documentation is accurate
+
+## Windows Development
+
+### Requirements for Windows Development
+
+- Windows 10+ with Developer Mode enabled
+- PowerShell 5.1+ or PowerShell 7
+- VS Code with PowerShell extension (recommended)
+- Git for Windows
+
+### Editing PowerShell Scripts
+
+Use VS Code with the PowerShell extension for best experience:
+
+```powershell
+code cvm.ps1
+code install.ps1
+code tests/integration-test.ps1
+```
+
+Or use PowerShell ISE (included with Windows):
+
+```powershell
+ise cvm.ps1
+```
+
+### Testing Windows Changes
+
+1. Test in clean environment:
+
+```powershell
+# Remove existing installation
+Remove-Item -Recurse -Force "$env:USERPROFILE\.cvm" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$env:USERPROFILE\.cvm-repo" -ErrorAction SilentlyContinue
+
+# Test installation
+.\install.ps1
+
+# Run tests
+.\tests\integration-test.ps1
+```
+
+2. Test in different shells:
+   - PowerShell 5.1 (Windows default)
+   - PowerShell 7 (if available)
+   - Git Bash (should redirect)
+
+3. Test without Developer Mode to verify error messages
+
+### Code Style for PowerShell
+
+- Use 4 spaces for indentation (PowerShell convention)
+- Use PascalCase for function names (Verb-Noun format)
+- Use `$script:` prefix for script-level variables
+- Use proper PowerShell cmdlets (not aliases in scripts)
+- Add comment-based help for functions
+- Use `$ErrorActionPreference = 'Stop'` for error handling
+
 ## Adding New Commands
 
 1. Add function to cvm.sh (before `cvm_main`)

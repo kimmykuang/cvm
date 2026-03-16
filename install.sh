@@ -5,6 +5,54 @@ set -e
 # cvm installer
 # Installs cvm (Claude Version Manager) to ~/.cvm-repo
 
+# ============================================================================
+# OS Detection
+# ============================================================================
+
+detect_os() {
+    case "$OSTYPE" in
+        msys*|mingw*|cygwin*)
+            echo "windows-git-bash"
+            ;;
+        linux-gnu*)
+            if grep -qi microsoft /proc/version 2>/dev/null; then
+                echo "wsl"
+            else
+                echo "linux"
+            fi
+            ;;
+        darwin*)
+            echo "macos"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
+}
+
+OS_TYPE=$(detect_os)
+
+# If running in Git Bash on Windows, redirect to PowerShell installer
+if [ "$OS_TYPE" = "windows-git-bash" ]; then
+    echo "Windows detected. Using PowerShell installer..."
+    echo ""
+
+    # Find script directory
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # Check if PowerShell is available
+    if command -v powershell.exe &> /dev/null; then
+        # Execute PowerShell installer
+        powershell.exe -ExecutionPolicy Bypass -File "$SCRIPT_DIR/install.ps1"
+        exit $?
+    else
+        echo "Error: PowerShell not found."
+        echo "Please install PowerShell or run install.ps1 directly from PowerShell."
+        exit 1
+    fi
+fi
+
+# Continue with Unix installation for Linux/macOS/WSL
 echo "Installing cvm (Claude Version Manager)..."
 echo ""
 

@@ -1,0 +1,21 @@
+# Set line endings for cross-platform compatibility
+
+# Unix scripts must use LF
+*.sh text eol=lf
+
+# PowerShell scripts use CRLF
+*.ps1 text eol=crlf
+
+# Markdown and documentation
+*.md text
+
+# JSON and configuration files
+*.json text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

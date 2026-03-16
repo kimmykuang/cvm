@@ -25,20 +25,31 @@ cvm lets you manage multiple versions and switch between them seamlessly.
 
 ## Requirements
 
+### Unix (macOS, Linux, WSL)
+
 - **Bash or Zsh** shell
 - **npm** (comes with Node.js)
 - **Git** (for installation)
 
+### Windows
+
+- **Windows 10+** with Developer Mode enabled ([setup guide](docs/WINDOWS.md#enabling-developer-mode))
+- **PowerShell 5.1+** (included with Windows)
+- **npm** (comes with Node.js) - [Download](https://nodejs.org/)
+- **Git for Windows** - [Download](https://git-scm.com/download/win)
+
 ## Installation
 
-### Quick Install
+### Unix (macOS, Linux, WSL)
+
+**Quick Install:**
 
 ```bash
 curl -o- https://raw.githubusercontent.com/kimmykuang/cvm/main/install.sh | bash
 # Then restart your shell or run: source ~/.zshrc
 ```
 
-### Manual Install
+**Manual Install:**
 
 ```bash
 git clone https://github.com/kimmykuang/cvm.git ~/.cvm-repo
@@ -51,9 +62,52 @@ echo 'alias cvm="$HOME/.cvm-repo/cvm.sh"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-## Quick Start
+### Windows
+
+**Quick Install (PowerShell):**
+
+```powershell
+# Run in PowerShell
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/kimmykuang/cvm/main/install.ps1 -OutFile install.ps1
+.\install.ps1
+# Then restart PowerShell or run: . $PROFILE
+```
+
+**Quick Install (Git Bash):**
 
 ```bash
+# Run in Git Bash (auto-redirects to PowerShell)
+curl -o- https://raw.githubusercontent.com/kimmykuang/cvm/main/install.sh | bash
+```
+
+**📖 For detailed Windows setup including Developer Mode, see [Windows Guide](docs/WINDOWS.md)**
+
+## Quick Start
+
+**Unix (Bash/Zsh):**
+
+```bash
+# Install versions you need
+cvm install 2.1.71
+cvm install 2.1.63
+
+# Switch to a version
+cvm use 2.1.71
+
+# Verify
+claude --version
+
+# Create provider aliases
+cvm alias provider-a 2.1.71
+cvm alias provider-b 2.1.63
+
+# Switch using alias
+cvm use provider-a
+```
+
+**Windows (PowerShell):**
+
+```powershell
 # Install versions you need
 cvm install 2.1.71
 cvm install 2.1.63
@@ -181,7 +235,9 @@ cvm use anthropic-official
 
 ## Troubleshooting
 
-### "command not found: cvm"
+### Unix/macOS/WSL
+
+#### "command not found: cvm"
 
 Make sure the alias is in your shell config:
 
@@ -196,7 +252,7 @@ echo 'alias cvm="$HOME/.cvm-repo/cvm.sh"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-### "command not found: claude"
+#### "command not found: claude"
 
 Make sure `~/.cvm/bin` is in your PATH:
 
@@ -210,6 +266,38 @@ If missing, add:
 echo 'export PATH="$HOME/.cvm/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
+
+### Windows
+
+#### "cvm : The term 'cvm' is not recognized"
+
+Restart PowerShell or reload your profile:
+
+```powershell
+. $PROFILE
+```
+
+Check if configured:
+
+```powershell
+Get-Content $PROFILE
+```
+
+#### "Cannot create symbolic link" Error
+
+Enable Windows Developer Mode (see [Windows Guide](docs/WINDOWS.md#enabling-developer-mode)), then restart PowerShell.
+
+#### "claude : The term 'claude' is not recognized"
+
+Check PATH configuration:
+
+```powershell
+$env:PATH -split ';' | Select-String ".cvm"
+```
+
+Should show your .cvm\bin directory.
+
+**For complete Windows troubleshooting, see [Windows Guide](docs/WINDOWS.md#troubleshooting)**
 
 ### Version install fails
 

@@ -1,3 +1,15 @@
 *.log
 .DS_Store
 node_modules/
+
+# Windows
+Desktop.ini
+Thumbs.db
+*.ps1~
+$RECYCLE.BIN/
+
+# PowerShell
+*.ps1.bak
+
+# Test artifacts
+**/cvm-test-*
