@@ -854,16 +854,33 @@ function Invoke-CvmUpdate {
 
         # Fetch updates
         Write-Host "Fetching updates from GitHub..." -ForegroundColor Yellow
-        git fetch origin 2>&1 | Out-Null
 
-        if ($LASTEXITCODE -ne 0) {
-            Write-CvmError "Failed to fetch updates"
-            return 1
+        # Suppress git progress output which PowerShell treats as errors
+        $env:GIT_TERMINAL_PROMPT = "0"
+        try {
+            git fetch origin --quiet 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                # Try again without quiet to see actual errors
+                $fetchOutput = git fetch origin 2>&1 | Out-String
+                if ($LASTEXITCODE -ne 0) {
+                    Write-CvmError "Failed to fetch updates"
+                    Write-Host $fetchOutput
+                    return 1
+                }
+            }
+        }
+        catch {
+            # Ignore PowerShell pipeline errors from git output
         }
 
         # Check if updates available
-        $localCommit = git rev-parse HEAD
-        $remoteCommit = git rev-parse origin/main
+        $localCommit = git rev-parse HEAD 2>$null
+        $remoteCommit = git rev-parse origin/main 2>$null
+
+        if (-not $localCommit -or -not $remoteCommit) {
+            Write-CvmError "Failed to get commit information"
+            return 1
+        }
 
         if ($localCommit -eq $remoteCommit) {
             Write-Host "[OK] Already up to date!" -ForegroundColor Green
@@ -872,8 +889,11 @@ function Invoke-CvmUpdate {
 
         # Show what will be updated
         Write-Host "Updates available:" -ForegroundColor Cyan
-        git log --oneline HEAD..origin/main | ForEach-Object {
-            Write-Host "  $_" -ForegroundColor Gray
+        $logOutput = git log --oneline HEAD..origin/main 2>$null
+        if ($logOutput) {
+            $logOutput | ForEach-Object {
+                Write-Host "  $_" -ForegroundColor Gray
+            }
         }
         Write-Host ""
 
@@ -887,20 +907,29 @@ function Invoke-CvmUpdate {
         # Pull updates
         Write-Host ""
         Write-Host "Updating..." -ForegroundColor Yellow
-        $output = git pull origin main 2>&1
 
-        if ($LASTEXITCODE -eq 0) {
-            $newCommit = git rev-parse --short HEAD
-            Write-Host ""
-            Write-Host "[OK] Successfully updated!" -ForegroundColor Green
-            Write-Host "Old version: $currentCommit" -ForegroundColor Gray
-            Write-Host "New version: $newCommit" -ForegroundColor Gray
-            Write-Host ""
-            Write-Host "Please restart PowerShell for changes to take effect." -ForegroundColor Cyan
-            return 0
-        } else {
-            Write-CvmError "Update failed"
-            Write-Host $output
+        try {
+            $pullOutput = git pull origin main --quiet 2>&1 | Out-String
+
+            if ($LASTEXITCODE -eq 0) {
+                $newCommit = git rev-parse --short HEAD 2>$null
+                Write-Host ""
+                Write-Host "[OK] Successfully updated!" -ForegroundColor Green
+                Write-Host "Old version: $currentCommit" -ForegroundColor Gray
+                Write-Host "New version: $newCommit" -ForegroundColor Gray
+                Write-Host ""
+                Write-Host "Please restart PowerShell for changes to take effect." -ForegroundColor Cyan
+                return 0
+            } else {
+                Write-CvmError "Update failed"
+                if ($pullOutput) {
+                    Write-Host $pullOutput
+                }
+                return 1
+            }
+        }
+        catch {
+            Write-CvmError "Update failed: $($_.Exception.Message)"
             return 1
         }
     }
