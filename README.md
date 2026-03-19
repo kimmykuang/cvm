@@ -323,6 +323,8 @@ If `claude --version` shows wrong version:
 | `cvm alias <name> <version>` | Create an alias |
 | `cvm unalias <name>` | Remove an alias |
 | `cvm uninstall <version>` | Uninstall a version |
+| `cvm doctor` | Run system diagnostics |
+| `cvm update` | Update cvm to latest version |
 | `cvm version` | Show cvm version |
 | `cvm help` | Show help message |
 

@@ -522,6 +522,287 @@ function Invoke-CvmUninstall {
     return 0
 }
 
+function Invoke-CvmDoctor {
+    Write-Host "=== CVM Doctor - System Diagnostic ===" -ForegroundColor Cyan
+    Write-Host ""
+
+    $allHealthy = $true
+
+    # 1. Platform check
+    Write-Host "1. Platform Check" -ForegroundColor Yellow
+    Write-Host "   OS: Windows"
+    $osVersion = [System.Environment]::OSVersion.Version
+    Write-Host "   Version: $($osVersion.Major).$($osVersion.Minor).$($osVersion.Build)"
+    if ($osVersion.Major -lt 10) {
+        Write-Host "   [X] Windows 10+ required" -ForegroundColor Red
+        $allHealthy = $false
+    } else {
+        Write-Host "   [OK] Version compatible" -ForegroundColor Green
+    }
+    Write-Host ""
+
+    # 2. Developer Mode check
+    Write-Host "2. Developer Mode Check" -ForegroundColor Yellow
+    try {
+        $devMode = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" -ErrorAction Stop).AllowDevelopmentWithoutDevLicense
+        if ($devMode -eq 1) {
+            Write-Host "   [OK] Developer Mode enabled" -ForegroundColor Green
+        } else {
+            Write-Host "   [X] Developer Mode disabled" -ForegroundColor Red
+            Write-Host "   Fix: Settings > Update & Security > For developers" -ForegroundColor Yellow
+            $allHealthy = $false
+        }
+    } catch {
+        Write-Host "   [X] Developer Mode not configured" -ForegroundColor Red
+        $allHealthy = $false
+    }
+    Write-Host ""
+
+    # 3. Symlink capability test
+    Write-Host "3. Symbolic Link Test" -ForegroundColor Yellow
+    $testDir = Join-Path $env:TEMP "cvm-doctor-$(Get-Random)"
+    try {
+        New-Item -ItemType Directory -Path $testDir -Force | Out-Null
+        $testFile = Join-Path $testDir "test.txt"
+        $testLink = Join-Path $testDir "link.txt"
+        "test" | Out-File $testFile
+        New-Item -ItemType SymbolicLink -Path $testLink -Target $testFile -ErrorAction Stop | Out-Null
+        Write-Host "   [OK] Can create symbolic links" -ForegroundColor Green
+        Remove-Item -Path $testDir -Recurse -Force
+    } catch {
+        Write-Host "   [X] Cannot create symbolic links" -ForegroundColor Red
+        Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor Gray
+        Write-Host "   Fix: Enable Developer Mode and restart" -ForegroundColor Yellow
+        Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
+        $allHealthy = $false
+    }
+    Write-Host ""
+
+    # 4. Node.js and npm check
+    Write-Host "4. Dependencies Check" -ForegroundColor Yellow
+    $nodeVersion = node --version 2>$null
+    $npmVersion = npm --version 2>$null
+
+    if ($nodeVersion) {
+        Write-Host "   [OK] Node.js: $nodeVersion" -ForegroundColor Green
+    } else {
+        Write-Host "   [X] Node.js not found" -ForegroundColor Red
+        Write-Host "   Install: https://nodejs.org/" -ForegroundColor Yellow
+        $allHealthy = $false
+    }
+
+    if ($npmVersion) {
+        Write-Host "   [OK] npm: $npmVersion" -ForegroundColor Green
+    } else {
+        Write-Host "   [X] npm not found" -ForegroundColor Red
+        $allHealthy = $false
+    }
+    Write-Host ""
+
+    # 5. cvm directory structure
+    Write-Host "5. CVM Installation Check" -ForegroundColor Yellow
+    $dirs = @(
+        @{Path="$script:CVM_DIR"; Name="cvm directory"},
+        @{Path="$script:CVM_VERSIONS_DIR"; Name="versions directory"},
+        @{Path="$script:CVM_BIN_DIR"; Name="bin directory"},
+        @{Path="$script:CVM_ALIAS_DIR"; Name="alias directory"}
+    )
+
+    foreach ($dir in $dirs) {
+        if (Test-Path $dir.Path) {
+            Write-Host "   [OK] $($dir.Name)" -ForegroundColor Green
+        } else {
+            Write-Host "   [!] $($dir.Name) missing (will be created on first use)" -ForegroundColor Yellow
+        }
+    }
+    Write-Host ""
+
+    # 6. PATH configuration
+    Write-Host "6. PATH Configuration" -ForegroundColor Yellow
+    $pathParts = $env:PATH -split ';'
+    $cvmBinInPath = $pathParts | Where-Object { $_ -eq $script:CVM_BIN_DIR }
+
+    if ($cvmBinInPath) {
+        Write-Host "   [OK] cvm bin directory in PATH" -ForegroundColor Green
+    } else {
+        Write-Host "   [X] cvm bin directory NOT in PATH" -ForegroundColor Red
+        Write-Host "   Add to profile: `$env:PATH = `"$($script:CVM_BIN_DIR);`$env:PATH`"" -ForegroundColor Yellow
+        $allHealthy = $false
+    }
+    Write-Host ""
+
+    # 7. Installed versions check
+    Write-Host "7. Installed Versions" -ForegroundColor Yellow
+    if (Test-Path $script:CVM_VERSIONS_DIR) {
+        $versions = Get-ChildItem $script:CVM_VERSIONS_DIR -Directory -ErrorAction SilentlyContinue
+        if ($versions.Count -gt 0) {
+            Write-Host "   [OK] $($versions.Count) version(s) installed:" -ForegroundColor Green
+            foreach ($v in $versions) {
+                $cliPath = Join-Path $v.FullName "node_modules\@anthropic-ai\claude-code\cli.js"
+                if (Test-Path $cliPath) {
+                    Write-Host "       - $($v.Name) [OK]" -ForegroundColor Gray
+                } else {
+                    Write-Host "       - $($v.Name) [CORRUPTED]" -ForegroundColor Red
+                }
+            }
+        } else {
+            Write-Host "   [!] No versions installed yet" -ForegroundColor Yellow
+            Write-Host "   Run: cvm install 2.1.71" -ForegroundColor Cyan
+        }
+    } else {
+        Write-Host "   [!] No versions installed yet" -ForegroundColor Yellow
+    }
+    Write-Host ""
+
+    # 8. Current version symlink check
+    Write-Host "8. Active Version Check" -ForegroundColor Yellow
+    $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
+    if (Test-Path $claudeLink) {
+        try {
+            $linkItem = Get-Item $claudeLink
+            $target = $linkItem.Target
+
+            if ($target -is [array]) {
+                $target = $target[0]
+            }
+
+            if ($target) {
+                $targetStr = $target.ToString()
+                Write-Host "   [OK] Symlink exists" -ForegroundColor Green
+                Write-Host "   Target: $targetStr" -ForegroundColor Gray
+
+                if (Test-Path $target) {
+                    Write-Host "   [OK] Target is valid" -ForegroundColor Green
+                } else {
+                    Write-Host "   [X] Target does not exist!" -ForegroundColor Red
+                    Write-Host "   Fix: cvm use <version>" -ForegroundColor Yellow
+                    $allHealthy = $false
+                }
+            } else {
+                Write-Host "   [X] Symlink has no target" -ForegroundColor Red
+                $allHealthy = $false
+            }
+        } catch {
+            Write-Host "   [X] Symlink error: $($_.Exception.Message)" -ForegroundColor Red
+            $allHealthy = $false
+        }
+    } else {
+        Write-Host "   [!] No active version" -ForegroundColor Yellow
+        Write-Host "   Run: cvm use <version>" -ForegroundColor Cyan
+    }
+    Write-Host ""
+
+    # Summary
+    Write-Host "========================================" -ForegroundColor Cyan
+    if ($allHealthy) {
+        Write-Host "[OK] All checks passed!" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Your cvm installation is healthy." -ForegroundColor Green
+    } else {
+        Write-Host "[!] Some issues detected" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Please fix the issues above." -ForegroundColor Yellow
+        Write-Host "For detailed help, see:" -ForegroundColor Cyan
+        Write-Host "  https://github.com/kimmykuang/cvm/blob/main/docs/WINDOWS.md"
+    }
+    Write-Host ""
+
+    return if ($allHealthy) { 0 } else { 1 }
+}
+
+function Invoke-CvmUpdate {
+    Write-Host "=== CVM Self-Update ===" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Check if we're in a git repository
+    $cvmRepoDir = "$env:USERPROFILE\.cvm-repo"
+
+    if (-not (Test-Path $cvmRepoDir)) {
+        Write-CvmError "CVM repository not found at: $cvmRepoDir"
+        Write-Host "Please reinstall cvm using install.ps1"
+        return 1
+    }
+
+    Push-Location $cvmRepoDir
+
+    try {
+        # Check if git is available
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            Write-CvmError "git is not installed"
+            Write-Host "Please install git: https://git-scm.com/"
+            return 1
+        }
+
+        # Check if it's a git repository
+        $isGitRepo = Test-Path (Join-Path $cvmRepoDir ".git")
+        if (-not $isGitRepo) {
+            Write-CvmError "Not a git repository"
+            Write-Host "Please reinstall cvm using install.ps1"
+            return 1
+        }
+
+        # Get current commit
+        $currentCommit = git rev-parse --short HEAD 2>$null
+        Write-Host "Current version: $currentCommit" -ForegroundColor Gray
+        Write-Host ""
+
+        # Fetch updates
+        Write-Host "Fetching updates from GitHub..." -ForegroundColor Yellow
+        git fetch origin 2>&1 | Out-Null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-CvmError "Failed to fetch updates"
+            return 1
+        }
+
+        # Check if updates available
+        $localCommit = git rev-parse HEAD
+        $remoteCommit = git rev-parse origin/main
+
+        if ($localCommit -eq $remoteCommit) {
+            Write-Host "[OK] Already up to date!" -ForegroundColor Green
+            return 0
+        }
+
+        # Show what will be updated
+        Write-Host "Updates available:" -ForegroundColor Cyan
+        git log --oneline HEAD..origin/main | ForEach-Object {
+            Write-Host "  $_" -ForegroundColor Gray
+        }
+        Write-Host ""
+
+        # Confirm update
+        $response = Read-Host "Update to latest version? [Y/n]"
+        if ($response -match '^[Nn]$') {
+            Write-Host "Update cancelled."
+            return 0
+        }
+
+        # Pull updates
+        Write-Host ""
+        Write-Host "Updating..." -ForegroundColor Yellow
+        $output = git pull origin main 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            $newCommit = git rev-parse --short HEAD
+            Write-Host ""
+            Write-Host "[OK] Successfully updated!" -ForegroundColor Green
+            Write-Host "Old version: $currentCommit" -ForegroundColor Gray
+            Write-Host "New version: $newCommit" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "Please restart PowerShell for changes to take effect." -ForegroundColor Cyan
+            return 0
+        } else {
+            Write-CvmError "Update failed"
+            Write-Host $output
+            return 1
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Show-CvmHelp {
     @"
 Usage: cvm <command> [args]
@@ -534,6 +815,8 @@ Commands:
   alias <name> <ver>    Create a named alias for a version
   unalias <name>        Remove an alias
   uninstall <version>   Remove an installed version
+  doctor                Run system diagnostics
+  update                Update cvm to the latest version
   version, -v, --version  Show cvm version
   help, -h, --help      Show this help message
 
@@ -545,6 +828,8 @@ Examples:
   cvm use provider-a
   cvm list
   cvm current
+  cvm doctor
+  cvm update
   cvm uninstall 2.1.63
 
 Integration with cc-switch:
@@ -595,6 +880,12 @@ switch ($cmd) {
     { $_ -in "uninstall", "remove" } {
         $version = $Arguments[0]
         exit (Invoke-CvmUninstall $version)
+    }
+    "doctor" {
+        exit (Invoke-CvmDoctor)
+    }
+    "update" {
+        exit (Invoke-CvmUpdate)
     }
     { $_ -in "version", "--version", "-v" } {
         Write-Host "cvm $($script:CVM_VERSION)"
