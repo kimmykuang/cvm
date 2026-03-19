@@ -324,9 +324,29 @@ If `claude --version` shows wrong version:
 | `cvm unalias <name>` | Remove an alias |
 | `cvm uninstall <version>` | Uninstall a version |
 | `cvm doctor` | Run system diagnostics |
+| `cvm fix [version]` | Auto-fix symlink issues |
 | `cvm update` | Update cvm to latest version |
 | `cvm version` | Show cvm version |
 | `cvm help` | Show help message |
+
+## Troubleshooting Workflow
+
+If you encounter issues, use this workflow:
+
+```bash
+# 1. Diagnose the problem
+cvm doctor
+
+# 2. Auto-fix symlink issues (if detected)
+cvm fix
+
+# 3. Verify the fix
+cvm doctor
+
+# 4. Test
+cvm current
+claude --version
+```
 
 ## Uninstalling cvm
 

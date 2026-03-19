@@ -522,6 +522,172 @@ function Invoke-CvmUninstall {
     return 0
 }
 
+function Invoke-CvmFix {
+    param([string]$Version = "")
+
+    Write-Host "=== CVM Auto-Fix Tool ===" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Check installed versions
+    Write-Host "Checking installed versions..." -ForegroundColor Yellow
+
+    if (-not (Test-Path $script:CVM_VERSIONS_DIR)) {
+        Write-CvmError "No versions directory found"
+        Write-Host "Please run: cvm install 2.1.63" -ForegroundColor Cyan
+        return 1
+    }
+
+    $installedVersions = Get-ChildItem $script:CVM_VERSIONS_DIR -Directory -ErrorAction SilentlyContinue
+    if ($installedVersions.Count -eq 0) {
+        Write-CvmError "No versions installed"
+        Write-Host "Please run: cvm install 2.1.63" -ForegroundColor Cyan
+        return 1
+    }
+
+    Write-Host "[OK] Found $($installedVersions.Count) installed version(s)" -ForegroundColor Green
+    $installedVersions | ForEach-Object {
+        Write-Host "   - $($_.Name)"
+    }
+    Write-Host ""
+
+    # Determine which version to fix
+    if (-not $Version) {
+        if ($installedVersions.Count -eq 1) {
+            $Version = $installedVersions[0].Name
+            Write-Host "Auto-selecting only installed version: $Version" -ForegroundColor Cyan
+        } else {
+            Write-Host "Multiple versions installed. Specify which one to activate:" -ForegroundColor Yellow
+            $Version = Read-Host "Enter version (e.g., 2.1.63)"
+        }
+    }
+
+    if (-not $Version) {
+        Write-CvmError "No version specified"
+        return 1
+    }
+
+    Write-Host ""
+    Write-Host "Fixing symlinks for version $Version..." -ForegroundColor Yellow
+
+    $versionDir = Join-Path $script:CVM_VERSIONS_DIR $Version
+    if (-not (Test-Path $versionDir)) {
+        Write-CvmError "Version $Version not found"
+        return 1
+    }
+
+    # Find cli.js
+    $cliPath = Join-Path $versionDir "node_modules\@anthropic-ai\claude-code\cli.js"
+    if (-not (Test-Path $cliPath)) {
+        Write-CvmError "cli.js not found at: $cliPath"
+        Write-Host "Version may be corrupted. Try reinstalling:" -ForegroundColor Yellow
+        Write-Host "  cvm uninstall $Version"
+        Write-Host "  cvm install $Version"
+        return 1
+    }
+
+    Write-Host "[OK] Found cli.js" -ForegroundColor Green
+    Write-Host ""
+
+    # Fix version bin symlink
+    Write-Host "Creating version bin symlink..." -ForegroundColor Yellow
+    $versionBinDir = Join-Path $versionDir "bin"
+    $versionClaudeLink = Join-Path $versionBinDir "claude"
+
+    New-Item -ItemType Directory -Path $versionBinDir -Force | Out-Null
+
+    if (Test-Path $versionClaudeLink) {
+        Remove-Item $versionClaudeLink -Force
+    }
+
+    try {
+        New-Item -ItemType SymbolicLink -Path $versionClaudeLink -Target $cliPath -Force -ErrorAction Stop | Out-Null
+        Write-Host "[OK] Created version symlink" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[X] Failed to create symlink: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Creating .cmd wrapper as fallback..." -ForegroundColor Yellow
+
+        $wrapperCmd = "$versionBinDir\claude.cmd"
+        @"
+@echo off
+node "$cliPath" %*
+"@ | Out-File -FilePath $wrapperCmd -Encoding ASCII
+
+        $versionClaudeLink = $wrapperCmd
+        Write-Host "[OK] Created wrapper: $wrapperCmd" -ForegroundColor Green
+    }
+
+    Write-Host ""
+
+    # Fix main bin symlink
+    Write-Host "Creating main bin symlink..." -ForegroundColor Yellow
+    $mainClaudeLink = Join-Path $script:CVM_BIN_DIR "claude"
+
+    New-Item -ItemType Directory -Path $script:CVM_BIN_DIR -Force | Out-Null
+
+    if (Test-Path $mainClaudeLink) {
+        Remove-Item $mainClaudeLink -Force
+    }
+
+    try {
+        New-Item -ItemType SymbolicLink -Path $mainClaudeLink -Target $versionClaudeLink -Force -ErrorAction Stop | Out-Null
+        Write-Host "[OK] Created main symlink" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[X] Failed to create symlink: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Creating .cmd wrapper as fallback..." -ForegroundColor Yellow
+
+        $mainCmd = "$($script:CVM_BIN_DIR)\claude.cmd"
+        @"
+@echo off
+node "$cliPath" %*
+"@ | Out-File -FilePath $mainCmd -Encoding ASCII
+
+        Write-Host "[OK] Created wrapper: $mainCmd" -ForegroundColor Green
+    }
+
+    Write-Host ""
+
+    # Verify
+    Write-Host "Verifying installation..." -ForegroundColor Yellow
+
+    # Check PATH
+    $pathParts = $env:PATH -split ';'
+    $cvmBinInPath = $pathParts | Where-Object { $_ -eq $script:CVM_BIN_DIR }
+
+    if (-not $cvmBinInPath) {
+        Write-Host "[!] WARNING: $($script:CVM_BIN_DIR) is not in PATH" -ForegroundColor Yellow
+        Write-Host "Add it to your profile:" -ForegroundColor Cyan
+        Write-Host "  `$env:PATH = `"$($script:CVM_BIN_DIR);`$env:PATH`""
+        Write-Host ""
+    }
+
+    # Test claude command
+    try {
+        $testOutput = node "$cliPath" --version 2>&1 | Out-String
+        if ($testOutput) {
+            Write-Host "[OK] Claude CLI works!" -ForegroundColor Green
+            Write-Host "   Version: $($testOutput.Trim())"
+        }
+    }
+    catch {
+        Write-Host "[X] Failed to run claude: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "         FIX COMPLETE!" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Next steps:" -ForegroundColor Cyan
+    Write-Host "  1. Close and reopen PowerShell"
+    Write-Host "  2. Try: claude --version"
+    Write-Host "  3. Verify: cvm current"
+    Write-Host ""
+
+    return 0
+}
+
 function Invoke-CvmDoctor {
     Write-Host "=== CVM Doctor - System Diagnostic ===" -ForegroundColor Cyan
     Write-Host ""
@@ -820,26 +986,27 @@ Commands:
   unalias <name>        Remove an alias
   uninstall <version>   Remove an installed version
   doctor                Run system diagnostics
+  fix [version]         Auto-fix symlink issues
   update                Update cvm to the latest version
   version, -v, --version  Show cvm version
   help, -h, --help      Show this help message
 
 Examples:
   cvm install 2.1.71
-  cvm install 2.1.63
   cvm use 2.1.71
-  cvm alias provider-a 2.1.71
-  cvm use provider-a
   cvm list
   cvm current
-  cvm doctor
-  cvm update
+  cvm doctor            # Diagnose issues
+  cvm fix               # Auto-fix symlink problems
+  cvm fix 2.1.71        # Fix specific version
+  cvm update            # Update cvm itself
+  cvm alias stable 2.1.71
   cvm uninstall 2.1.63
 
-Integration with cc-switch:
-  1. Install required versions: cvm install 2.1.71; cvm install 2.1.63
-  2. Create provider aliases: cvm alias provider-a 2.1.71
-  3. Switch before using provider: cvm use provider-a
+Troubleshooting workflow:
+  1. cvm doctor         # Identify problems
+  2. cvm fix            # Auto-fix symlink issues
+  3. cvm doctor         # Verify fixes
 
 Documentation: https://github.com/kimmykuang/cvm
 "@
@@ -887,6 +1054,10 @@ switch ($cmd) {
     }
     "doctor" {
         exit (Invoke-CvmDoctor)
+    }
+    "fix" {
+        $version = $Arguments[0]
+        exit (Invoke-CvmFix $version)
     }
     "update" {
         exit (Invoke-CvmUpdate)
