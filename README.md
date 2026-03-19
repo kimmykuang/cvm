@@ -33,10 +33,12 @@ cvm lets you manage multiple versions and switch between them seamlessly.
 
 ### Windows
 
-- **Windows 10+** with Developer Mode enabled ([setup guide](docs/WINDOWS.md#enabling-developer-mode))
+- **Windows 10+**
 - **PowerShell 5.1+** (included with Windows)
 - **npm** (comes with Node.js) - [Download](https://nodejs.org/)
 - **Git for Windows** - [Download](https://git-scm.com/download/win)
+
+**Note:** Developer Mode is NOT required. cvm uses `.cmd` wrapper files on Windows.
 
 ## Installation
 

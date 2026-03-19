@@ -8,7 +8,8 @@ Complete guide to using cvm (Claude Version Manager) on Windows.
 - **PowerShell 5.1 or later** (included with Windows)
 - **npm** (Node.js 14+ recommended) - [Download here](https://nodejs.org/)
 - **Git for Windows** - [Download here](https://git-scm.com/download/win)
-- **Developer Mode enabled** (required for symbolic links)
+
+**Note:** Developer Mode is **NOT required** anymore! cvm now uses `.cmd` wrapper files instead of symbolic links on Windows.
 
 ## What is Developer Mode?
 
