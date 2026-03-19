@@ -299,9 +299,19 @@ function Invoke-CvmList {
     $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
     if (Test-Path $claudeLink) {
         try {
-            $target = (Get-Item $claudeLink).Target
-            if ($target -match 'versions[/\\]([^/\\]+)[/\\]') {
-                $currentVersion = $matches[1]
+            $linkItem = Get-Item $claudeLink
+            $target = $linkItem.Target
+
+            # Handle Target being an array
+            if ($target -is [array]) {
+                $target = $target[0]
+            }
+
+            if ($target) {
+                $targetStr = $target.ToString()
+                if ($targetStr -match 'versions[/\\]([^/\\]+)[/\\]') {
+                    $currentVersion = $matches[1]
+                }
             }
         }
         catch {
@@ -348,15 +358,31 @@ function Invoke-CvmCurrent {
     }
 
     try {
-        $target = (Get-Item $claudeLink).Target
-        if ($target -match 'versions[/\\]([^/\\]+)[/\\]') {
+        $linkItem = Get-Item $claudeLink
+        $target = $linkItem.Target
+
+        # Handle Target being an array or null
+        if ($target -is [array]) {
+            $target = $target[0]
+        }
+
+        if (-not $target) {
+            Write-CvmError "Symlink exists but has no target"
+            Write-Host "Try running: cvm use <version>"
+            return 1
+        }
+
+        # Convert to string to ensure regex matching works
+        $targetStr = $target.ToString()
+
+        if ($targetStr -match 'versions[/\\]([^/\\]+)[/\\]') {
             $version = $matches[1]
             Write-CvmEcho "Current version: " -NoNewline
             Write-Host $version -ForegroundColor Green
 
             # Try to get actual claude version
             try {
-                $claudeVersion = & $claudeLink --version 2>$null
+                $claudeVersion = & node $claudeLink --version 2>$null
                 if ($claudeVersion) {
                     Write-Host "  ($claudeVersion)"
                 }
@@ -367,7 +393,8 @@ function Invoke-CvmCurrent {
 
             return 0
         } else {
-            Write-CvmError "Could not determine current version"
+            Write-CvmError "Could not parse version from symlink target: $targetStr"
+            Write-Host "Symlink target: $targetStr"
             return 1
         }
     }
@@ -445,19 +472,29 @@ function Invoke-CvmUninstall {
     $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
     if (Test-Path $claudeLink) {
         try {
-            $target = (Get-Item $claudeLink).Target
-            if ($target -match 'versions[/\\]([^/\\]+)[/\\]') {
-                $currentVersion = $matches[1]
+            $linkItem = Get-Item $claudeLink
+            $target = $linkItem.Target
 
-                if ($Version -eq $currentVersion) {
-                    Write-CvmWarn "This is the currently active version"
-                    $response = Read-Host "Continue with uninstall? [y/N]"
-                    if ($response -notmatch '^[Yy]$') {
-                        Write-CvmEcho "Uninstall cancelled"
-                        return 0
+            # Handle Target being an array
+            if ($target -is [array]) {
+                $target = $target[0]
+            }
+
+            if ($target) {
+                $targetStr = $target.ToString()
+                if ($targetStr -match 'versions[/\\]([^/\\]+)[/\\]') {
+                    $currentVersion = $matches[1]
+
+                    if ($Version -eq $currentVersion) {
+                        Write-CvmWarn "This is the currently active version"
+                        $response = Read-Host "Continue with uninstall? [y/N]"
+                        if ($response -notmatch '^[Yy]$') {
+                            Write-CvmEcho "Uninstall cancelled"
+                            return 0
+                        }
+                        Remove-Item $claudeLink -Force
+                        Write-CvmEcho "Deactivated version $Version"
                     }
-                    Remove-Item $claudeLink -Force
-                    Write-CvmEcho "Deactivated version $Version"
                 }
             }
         }
