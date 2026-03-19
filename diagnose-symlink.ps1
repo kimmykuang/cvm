@@ -13,6 +13,10 @@
 
 $ErrorActionPreference = 'Continue'
 
+# Set console output encoding to UTF-8 to avoid garbled characters
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 Write-Host "=== CVM Windows Symlink Diagnostic Tool ===" -ForegroundColor Cyan
 Write-Host ""
 
@@ -25,10 +29,10 @@ $osVersion = [System.Environment]::OSVersion.Version
 Write-Host "   Windows: $($osVersion.Major).$($osVersion.Minor).$($osVersion.Build)"
 
 if ($osVersion.Major -lt 10) {
-    Write-Host "   ✗ FAIL: Windows 10+ required" -ForegroundColor Red
+    Write-Host "   [X] FAIL: Windows 10+ required" -ForegroundColor Red
     $allTestsPassed = $false
 } else {
-    Write-Host "   ✓ PASS: Windows version OK" -ForegroundColor Green
+    Write-Host "   [OK] PASS: Windows version OK" -ForegroundColor Green
 }
 Write-Host ""
 
@@ -38,13 +42,13 @@ try {
     $devMode = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" -ErrorAction Stop).AllowDevelopmentWithoutDevLicense
 
     if ($devMode -eq 1) {
-        Write-Host "   ✓ PASS: Developer Mode is ENABLED" -ForegroundColor Green
+        Write-Host "   [OK] PASS: Developer Mode is ENABLED" -ForegroundColor Green
     } else {
-        Write-Host "   ✗ FAIL: Developer Mode is DISABLED (value: $devMode)" -ForegroundColor Red
+        Write-Host "   [X] FAIL: Developer Mode is DISABLED (value: $devMode)" -ForegroundColor Red
         $allTestsPassed = $false
     }
 } catch {
-    Write-Host "   ✗ FAIL: Developer Mode registry key not found" -ForegroundColor Red
+    Write-Host "   [X] FAIL: Developer Mode registry key not found" -ForegroundColor Red
     Write-Host "   Registry path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" -ForegroundColor Gray
     $allTestsPassed = $false
 }
@@ -55,9 +59,9 @@ Write-Host "3. Checking execution context..." -ForegroundColor Yellow
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if ($isAdmin) {
-    Write-Host "   ℹ INFO: Running as Administrator" -ForegroundColor Cyan
+    Write-Host "   [i] INFO: Running as Administrator" -ForegroundColor Cyan
 } else {
-    Write-Host "   ℹ INFO: Running as regular user" -ForegroundColor Cyan
+    Write-Host "   [i] INFO: Running as regular user" -ForegroundColor Cyan
 }
 Write-Host ""
 
@@ -75,15 +79,15 @@ try {
 
     $linkContent = Get-Content $testLink -Raw -ErrorAction Stop
     if ($linkContent -match "test content") {
-        Write-Host "   ✓ PASS: File symlink works!" -ForegroundColor Green
+        Write-Host "   [OK] PASS: File symlink works!" -ForegroundColor Green
     } else {
-        Write-Host "   ✗ FAIL: Symlink created but content wrong" -ForegroundColor Red
+        Write-Host "   [X] FAIL: Symlink created but content wrong" -ForegroundColor Red
         $allTestsPassed = $false
     }
 
     Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
-    Write-Host "   ✗ FAIL: Cannot create file symlink" -ForegroundColor Red
+    Write-Host "   [X] FAIL: Cannot create file symlink" -ForegroundColor Red
     Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor Red
     $allTestsPassed = $false
     Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -104,15 +108,15 @@ try {
     New-Item -ItemType SymbolicLink -Path $linkDir -Target $targetDir -ErrorAction Stop | Out-Null
 
     if (Test-Path (Join-Path $linkDir "file.txt")) {
-        Write-Host "   ✓ PASS: Directory symlink works!" -ForegroundColor Green
+        Write-Host "   [OK] PASS: Directory symlink works!" -ForegroundColor Green
     } else {
-        Write-Host "   ✗ FAIL: Dir symlink created but files not accessible" -ForegroundColor Red
+        Write-Host "   [X] FAIL: Dir symlink created but files not accessible" -ForegroundColor Red
         $allTestsPassed = $false
     }
 
     Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
-    Write-Host "   ✗ FAIL: Cannot create directory symlink" -ForegroundColor Red
+    Write-Host "   [X] FAIL: Cannot create directory symlink" -ForegroundColor Red
     Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor Red
     $allTestsPassed = $false
     Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -124,17 +128,17 @@ Write-Host "6. Checking SeCreateSymbolicLinkPrivilege..." -ForegroundColor Yello
 try {
     $privOutput = whoami /priv 2>$null | Out-String
     if ($privOutput -match "SeCreateSymbolicLinkPrivilege") {
-        Write-Host "   ✓ PASS: Privilege found" -ForegroundColor Green
+        Write-Host "   [OK] PASS: Privilege found" -ForegroundColor Green
         if ($privOutput -match "SeCreateSymbolicLinkPrivilege.*Enabled") {
             Write-Host "   Status: ENABLED" -ForegroundColor Green
         } else {
             Write-Host "   Status: DISABLED (but may auto-enable when needed)" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "   ⚠ WARNING: Privilege not found in whoami output" -ForegroundColor Yellow
+        Write-Host "   [!] WARNING: Privilege not found in whoami output" -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "   ⚠ WARNING: Could not check privileges" -ForegroundColor Yellow
+    Write-Host "   [!] WARNING: Could not check privileges" -ForegroundColor Yellow
 }
 Write-Host ""
 
@@ -145,18 +149,18 @@ try {
     $npmVersion = npm --version 2>$null
 
     if ($nodeVersion) {
-        Write-Host "   ✓ Node.js: $nodeVersion" -ForegroundColor Green
+        Write-Host "   [OK] Node.js: $nodeVersion" -ForegroundColor Green
     } else {
-        Write-Host "   ✗ Node.js not found in PATH" -ForegroundColor Red
+        Write-Host "   [X] Node.js not found in PATH" -ForegroundColor Red
     }
 
     if ($npmVersion) {
-        Write-Host "   ✓ npm: $npmVersion" -ForegroundColor Green
+        Write-Host "   [OK] npm: $npmVersion" -ForegroundColor Green
     } else {
-        Write-Host "   ✗ npm not found in PATH" -ForegroundColor Red
+        Write-Host "   [X] npm not found in PATH" -ForegroundColor Red
     }
 } catch {
-    Write-Host "   ⚠ Could not check Node.js/npm" -ForegroundColor Yellow
+    Write-Host "   [!] Could not check Node.js/npm" -ForegroundColor Yellow
 }
 Write-Host ""
 
@@ -167,7 +171,7 @@ Write-Host "======================================" -ForegroundColor Cyan
 Write-Host ""
 
 if ($allTestsPassed) {
-    Write-Host "✓ ALL TESTS PASSED!" -ForegroundColor Green
+    Write-Host "[OK] ALL TESTS PASSED!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Symbolic links are working correctly on your system." -ForegroundColor Green
     Write-Host "If cvm still has issues, try:" -ForegroundColor Cyan
@@ -176,7 +180,7 @@ if ($allTestsPassed) {
     Write-Host "  3. Run: cvm install 2.1.71"
     Write-Host ""
 } else {
-    Write-Host "✗ SOME TESTS FAILED" -ForegroundColor Red
+    Write-Host "[X] SOME TESTS FAILED" -ForegroundColor Red
     Write-Host ""
     Write-Host "=== RECOMMENDED ACTIONS ===" -ForegroundColor Yellow
     Write-Host ""
