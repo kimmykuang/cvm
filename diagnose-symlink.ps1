@@ -187,7 +187,7 @@ if ($allTestsPassed) {
 
     if ($devMode -ne 1) {
         Write-Host "STEP 1: Enable Developer Mode" -ForegroundColor Cyan
-        Write-Host "─────────────────────────────" -ForegroundColor Gray
+        Write-Host "------------------------------" -ForegroundColor Gray
         Write-Host ""
         Write-Host "Method A - Settings UI (Recommended):" -ForegroundColor White
         Write-Host "  1. Press Win + I to open Settings"
@@ -203,7 +203,7 @@ if ($allTestsPassed) {
     }
 
     Write-Host "STEP 2: Restart and Verify" -ForegroundColor Cyan
-    Write-Host "───────────────────────────" -ForegroundColor Gray
+    Write-Host "---------------------------" -ForegroundColor Gray
     Write-Host "  After enabling Developer Mode:"
     Write-Host "  1. Restart your computer (REQUIRED!)"
     Write-Host "  2. Run this script again: .\diagnose-symlink.ps1"
@@ -211,7 +211,7 @@ if ($allTestsPassed) {
     Write-Host ""
 
     Write-Host "STEP 3: Alternative Solutions (if above fails)" -ForegroundColor Cyan
-    Write-Host "────────────────────────────────────────────────" -ForegroundColor Gray
+    Write-Host "------------------------------------------------" -ForegroundColor Gray
     Write-Host ""
     Write-Host "  Option A - Run as Administrator:" -ForegroundColor White
     Write-Host "    Right-click PowerShell > Run as Administrator"
