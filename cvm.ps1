@@ -547,63 +547,44 @@ function Invoke-CvmFix {
     Write-Host "[OK] Found cli.js" -ForegroundColor Green
     Write-Host ""
 
-    # Fix version bin symlink
-    Write-Host "Creating version bin symlink..." -ForegroundColor Yellow
+    # Fix version bin wrapper
+    Write-Host "Creating version bin wrapper..." -ForegroundColor Yellow
     $versionBinDir = Join-Path $versionDir "bin"
-    $versionClaudeLink = Join-Path $versionBinDir "claude"
+    $versionClaudeCmd = Join-Path $versionBinDir "claude.cmd"
 
     New-Item -ItemType Directory -Path $versionBinDir -Force | Out-Null
 
-    if (Test-Path $versionClaudeLink) {
-        Remove-Item $versionClaudeLink -Force
+    if (Test-Path $versionClaudeCmd) {
+        Remove-Item $versionClaudeCmd -Force
     }
 
-    try {
-        New-Item -ItemType SymbolicLink -Path $versionClaudeLink -Target $cliPath -Force -ErrorAction Stop | Out-Null
-        Write-Host "[OK] Created version symlink" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "[X] Failed to create symlink: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "Creating .cmd wrapper as fallback..." -ForegroundColor Yellow
-
-        $wrapperCmd = "$versionBinDir\claude.cmd"
-        @"
+    # Create .cmd wrapper
+    @"
 @echo off
 node "$cliPath" %*
-"@ | Out-File -FilePath $wrapperCmd -Encoding ASCII
+"@ | Out-File -FilePath $versionClaudeCmd -Encoding ASCII
 
-        $versionClaudeLink = $wrapperCmd
-        Write-Host "[OK] Created wrapper: $wrapperCmd" -ForegroundColor Green
-    }
+    Write-Host "[OK] Created version wrapper" -ForegroundColor Green
 
     Write-Host ""
 
-    # Fix main bin symlink
-    Write-Host "Creating main bin symlink..." -ForegroundColor Yellow
-    $mainClaudeLink = Join-Path $script:CVM_BIN_DIR "claude"
+    # Fix main bin wrapper
+    Write-Host "Creating main bin wrapper..." -ForegroundColor Yellow
+    $mainClaudeCmd = Join-Path $script:CVM_BIN_DIR "claude.cmd"
 
     New-Item -ItemType Directory -Path $script:CVM_BIN_DIR -Force | Out-Null
 
-    if (Test-Path $mainClaudeLink) {
-        Remove-Item $mainClaudeLink -Force
-    }
+    # Remove old files
+    Remove-Item "$script:CVM_BIN_DIR\claude" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$script:CVM_BIN_DIR\claude.cmd" -Force -ErrorAction SilentlyContinue
 
-    try {
-        New-Item -ItemType SymbolicLink -Path $mainClaudeLink -Target $versionClaudeLink -Force -ErrorAction Stop | Out-Null
-        Write-Host "[OK] Created main symlink" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "[X] Failed to create symlink: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "Creating .cmd wrapper as fallback..." -ForegroundColor Yellow
-
-        $mainCmd = "$($script:CVM_BIN_DIR)\claude.cmd"
-        @"
+    # Create .cmd wrapper
+    @"
 @echo off
 node "$cliPath" %*
-"@ | Out-File -FilePath $mainCmd -Encoding ASCII
+"@ | Out-File -FilePath $mainClaudeCmd -Encoding ASCII
 
-        Write-Host "[OK] Created wrapper: $mainCmd" -ForegroundColor Green
-    }
+    Write-Host "[OK] Created main wrapper" -ForegroundColor Green
 
     Write-Host ""
 
