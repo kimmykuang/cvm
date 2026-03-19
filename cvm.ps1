@@ -707,7 +707,11 @@ function Invoke-CvmDoctor {
     }
     Write-Host ""
 
-    return if ($allHealthy) { 0 } else { 1 }
+    if ($allHealthy) {
+        return 0
+    } else {
+        return 1
+    }
 }
 
 function Invoke-CvmUpdate {
