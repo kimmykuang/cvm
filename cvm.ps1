@@ -168,20 +168,18 @@ function Invoke-CvmInstall {
             New-Item -ItemType Directory -Path $versionDir -Force | Out-Null
             Copy-Item -Path "node_modules" -Destination $versionDir -Recurse -Force
 
-            # Create bin directory with symlink
+            # Create bin directory with .cmd wrapper (Windows needs extension)
             $binDir = Join-Path $versionDir "bin"
             New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 
             $cliPath = Join-Path $versionDir "node_modules\@anthropic-ai\claude-code\cli.js"
-            $claudePath = Join-Path $binDir "claude"
+            $claudeCmd = Join-Path $binDir "claude.cmd"
 
-            try {
-                New-Item -ItemType SymbolicLink -Path $claudePath -Target $cliPath -Force | Out-Null
-            }
-            catch {
-                Write-CvmWarn "Could not create symlink, installation may not work properly"
-                Write-Host "Error: $($_.Exception.Message)"
-            }
+            # Create .cmd wrapper for Windows
+            @"
+@echo off
+node "$cliPath" %*
+"@ | Out-File -FilePath $claudeCmd -Encoding ASCII
 
             Write-CvmEcho "Successfully installed Claude CLI $Version"
             Pop-Location
@@ -236,50 +234,47 @@ function Invoke-CvmUse {
         return 1
     }
 
-    # Create symlink
-    $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
-    $claudeTarget = Join-Path $versionDir "bin\claude"
+    # Create main bin directory
+    New-Item -ItemType Directory -Path $script:CVM_BIN_DIR -Force | Out-Null
 
-    try {
-        if (Test-Path $claudeLink) {
-            Remove-Item $claudeLink -Force
-        }
+    # Path to the version's wrapper
+    $versionClaudeCmd = Join-Path $versionDir "bin\claude.cmd"
+    $mainClaudeCmd = Join-Path $script:CVM_BIN_DIR "claude.cmd"
 
-        New-Item -ItemType Directory -Path $script:CVM_BIN_DIR -Force | Out-Null
-        New-Item -ItemType SymbolicLink -Path $claudeLink -Target $claudeTarget -Force -ErrorAction Stop | Out-Null
+    # Remove old files
+    Remove-Item "$script:CVM_BIN_DIR\claude" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$script:CVM_BIN_DIR\claude.cmd" -Force -ErrorAction SilentlyContinue
 
-        Write-CvmEcho "Now using Claude CLI version $Version"
+    # Get the cli.js path for the wrapper
+    $cliPath = Join-Path $versionDir "node_modules\@anthropic-ai\claude-code\cli.js"
 
-        # Check if CVM_BIN_DIR is in PATH
-        $pathParts = $env:PATH -split ';'
-        $cvmBinInPath = $pathParts | Where-Object { $_ -eq $script:CVM_BIN_DIR }
-
-        if (-not $cvmBinInPath) {
-            Write-CvmWarn "Warning: $($script:CVM_BIN_DIR) is not in your PATH"
-            Write-Host "Add to your PowerShell profile:"
-            Write-Host "  `$env:PATH = `"$($script:CVM_BIN_DIR);`$env:PATH`""
-        }
-
-        return 0
-    }
-    catch {
-        if ($_.Exception.Message -match "privilege|administrator") {
-            Write-CvmError "Failed to create symbolic link. Developer Mode may not be enabled."
-            Write-Host ""
-            Write-Host "To enable Developer Mode:"
-            Write-Host "  1. Open Settings"
-            Write-Host "  2. Go to Update & Security > For developers"
-            Write-Host "  3. Enable Developer mode"
-            Write-Host ""
-            Write-Host "Or run as administrator:"
-            Write-Host '  reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /v AllowDevelopmentWithoutDevLicense /t REG_DWORD /d 1 /f'
-            Write-Host ""
-            Write-Host "Then restart PowerShell and try again."
-        } else {
-            Write-CvmError "Failed to create symbolic link: $($_.Exception.Message)"
-        }
+    if (-not (Test-Path $cliPath)) {
+        Write-CvmError "cli.js not found for version $Version"
+        Write-Host "Version may be corrupted. Try reinstalling:"
+        Write-Host "  cvm uninstall $Version"
+        Write-Host "  cvm install $Version"
         return 1
     }
+
+    # Create .cmd wrapper in main bin directory
+    @"
+@echo off
+node "$cliPath" %*
+"@ | Out-File -FilePath $mainClaudeCmd -Encoding ASCII
+
+    Write-CvmEcho "Now using Claude CLI version $Version"
+
+    # Check if CVM_BIN_DIR is in PATH
+    $pathParts = $env:PATH -split ';'
+    $cvmBinInPath = $pathParts | Where-Object { $_ -eq $script:CVM_BIN_DIR }
+
+    if (-not $cvmBinInPath) {
+        Write-CvmWarn "Warning: $($script:CVM_BIN_DIR) is not in your PATH"
+        Write-Host "Add to your PowerShell profile:"
+        Write-Host "  `$env:PATH = `"$($script:CVM_BIN_DIR);`$env:PATH`""
+    }
+
+    return 0
 }
 
 function Invoke-CvmList {
@@ -296,26 +291,16 @@ function Invoke-CvmList {
 
     # Get current version
     $currentVersion = $null
-    $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
-    if (Test-Path $claudeLink) {
+    $claudeCmd = Join-Path $script:CVM_BIN_DIR "claude.cmd"
+    if (Test-Path $claudeCmd) {
         try {
-            $linkItem = Get-Item $claudeLink
-            $target = $linkItem.Target
-
-            # Handle Target being an array
-            if ($target -is [array]) {
-                $target = $target[0]
-            }
-
-            if ($target) {
-                $targetStr = $target.ToString()
-                if ($targetStr -match 'versions[/\\]([^/\\]+)[/\\]') {
-                    $currentVersion = $matches[1]
-                }
+            $cmdContent = Get-Content $claudeCmd -Raw
+            if ($cmdContent -match 'versions[/\\]([^/\\]+)[/\\]') {
+                $currentVersion = $matches[1]
             }
         }
         catch {
-            # Ignore errors reading symlink
+            # Ignore errors reading cmd file
         }
     }
 
@@ -349,40 +334,25 @@ function Invoke-CvmList {
 }
 
 function Invoke-CvmCurrent {
-    $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
+    $claudeCmd = Join-Path $script:CVM_BIN_DIR "claude.cmd"
 
-    if (-not (Test-Path $claudeLink)) {
+    if (-not (Test-Path $claudeCmd)) {
         Write-CvmWarn "No active Claude CLI version"
         Write-Host "Run 'cvm use <version>' to activate a version"
         return 1
     }
 
+    # Read the .cmd file to extract version
     try {
-        $linkItem = Get-Item $claudeLink
-        $target = $linkItem.Target
-
-        # Handle Target being an array or null
-        if ($target -is [array]) {
-            $target = $target[0]
-        }
-
-        if (-not $target) {
-            Write-CvmError "Symlink exists but has no target"
-            Write-Host "Try running: cvm use <version>"
-            return 1
-        }
-
-        # Convert to string to ensure regex matching works
-        $targetStr = $target.ToString()
-
-        if ($targetStr -match 'versions[/\\]([^/\\]+)[/\\]') {
+        $cmdContent = Get-Content $claudeCmd -Raw
+        if ($cmdContent -match 'versions[/\\]([^/\\]+)[/\\]') {
             $version = $matches[1]
             Write-CvmEcho "Current version: " -NoNewline
             Write-Host $version -ForegroundColor Green
 
             # Try to get actual claude version
             try {
-                $claudeVersion = & node $claudeLink --version 2>$null
+                $claudeVersion = & $claudeCmd --version 2>$null
                 if ($claudeVersion) {
                     Write-Host "  ($claudeVersion)"
                 }
@@ -393,8 +363,7 @@ function Invoke-CvmCurrent {
 
             return 0
         } else {
-            Write-CvmError "Could not parse version from symlink target: $targetStr"
-            Write-Host "Symlink target: $targetStr"
+            Write-CvmError "Could not parse version from claude.cmd"
             return 1
         }
     }
@@ -469,32 +438,22 @@ function Invoke-CvmUninstall {
     }
 
     # Check if this is the active version
-    $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
-    if (Test-Path $claudeLink) {
+    $claudeCmd = Join-Path $script:CVM_BIN_DIR "claude.cmd"
+    if (Test-Path $claudeCmd) {
         try {
-            $linkItem = Get-Item $claudeLink
-            $target = $linkItem.Target
+            $cmdContent = Get-Content $claudeCmd -Raw
+            if ($cmdContent -match 'versions[/\\]([^/\\]+)[/\\]') {
+                $currentVersion = $matches[1]
 
-            # Handle Target being an array
-            if ($target -is [array]) {
-                $target = $target[0]
-            }
-
-            if ($target) {
-                $targetStr = $target.ToString()
-                if ($targetStr -match 'versions[/\\]([^/\\]+)[/\\]') {
-                    $currentVersion = $matches[1]
-
-                    if ($Version -eq $currentVersion) {
-                        Write-CvmWarn "This is the currently active version"
-                        $response = Read-Host "Continue with uninstall? [y/N]"
-                        if ($response -notmatch '^[Yy]$') {
-                            Write-CvmEcho "Uninstall cancelled"
-                            return 0
-                        }
-                        Remove-Item $claudeLink -Force
-                        Write-CvmEcho "Deactivated version $Version"
+                if ($Version -eq $currentVersion) {
+                    Write-CvmWarn "This is the currently active version"
+                    $response = Read-Host "Continue with uninstall? [y/N]"
+                    if ($response -notmatch '^[Yy]$') {
+                        Write-CvmEcho "Uninstall cancelled"
+                        return 0
                     }
+                    Remove-Item $claudeCmd -Force
+                    Write-CvmEcho "Deactivated version $Version"
                 }
             }
         }
