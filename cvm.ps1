@@ -779,36 +779,32 @@ function Invoke-CvmDoctor {
     }
     Write-Host ""
 
-    # 8. Current version symlink check
+    # 8. Current version check
     Write-Host "8. Active Version Check" -ForegroundColor Yellow
-    $claudeLink = Join-Path $script:CVM_BIN_DIR "claude"
-    if (Test-Path $claudeLink) {
+    $claudeCmd = Join-Path $script:CVM_BIN_DIR "claude.cmd"
+    if (Test-Path $claudeCmd) {
         try {
-            $linkItem = Get-Item $claudeLink
-            $target = $linkItem.Target
+            $cmdContent = Get-Content $claudeCmd -Raw
+            Write-Host "   [OK] claude.cmd exists" -ForegroundColor Green
 
-            if ($target -is [array]) {
-                $target = $target[0]
-            }
+            if ($cmdContent -match 'versions[/\\]([^/\\]+)[/\\]') {
+                $version = $matches[1]
+                Write-Host "   Version: $version" -ForegroundColor Gray
 
-            if ($target) {
-                $targetStr = $target.ToString()
-                Write-Host "   [OK] Symlink exists" -ForegroundColor Green
-                Write-Host "   Target: $targetStr" -ForegroundColor Gray
-
-                if (Test-Path $target) {
-                    Write-Host "   [OK] Target is valid" -ForegroundColor Green
+                $cliPath = Join-Path $script:CVM_VERSIONS_DIR "$version\node_modules\@anthropic-ai\claude-code\cli.js"
+                if (Test-Path $cliPath) {
+                    Write-Host "   [OK] Target cli.js is valid" -ForegroundColor Green
                 } else {
-                    Write-Host "   [X] Target does not exist!" -ForegroundColor Red
-                    Write-Host "   Fix: cvm use <version>" -ForegroundColor Yellow
+                    Write-Host "   [X] Target cli.js does not exist!" -ForegroundColor Red
+                    Write-Host "   Fix: cvm fix" -ForegroundColor Yellow
                     $allHealthy = $false
                 }
             } else {
-                Write-Host "   [X] Symlink has no target" -ForegroundColor Red
+                Write-Host "   [X] Cannot parse version from claude.cmd" -ForegroundColor Red
                 $allHealthy = $false
             }
         } catch {
-            Write-Host "   [X] Symlink error: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "   [X] Error reading claude.cmd: $($_.Exception.Message)" -ForegroundColor Red
             $allHealthy = $false
         }
     } else {
