@@ -107,6 +107,14 @@ cvm_install() {
   # Add trap for cleanup
   trap 'cd - > /dev/null 2>&1; rm -rf "$temp_dir"' EXIT INT TERM
 
+  # Detect actual hardware architecture (handle Rosetta 2)
+  local real_arch=""
+  if [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "x86_64" ]; then
+    if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+      real_arch="arm64"
+    fi
+  fi
+
   cat > package.json << EOF_JSON
 {
   "name": "cvm-temp-install",
@@ -117,10 +125,54 @@ cvm_install() {
 }
 EOF_JSON
 
-  if npm install --production --no-audit --no-fund --loglevel error 2>&1; then
+  # Under Rosetta, npm installs x64 optional deps but we need arm64
+  local npm_flags="--production --no-audit --no-fund --loglevel error"
+  if npm install $npm_flags 2>&1; then
+    # If running under Rosetta, also install the arm64 native package
+    # --force is needed because npm rejects arm64 packages on x64 Node
+    if [ "$real_arch" = "arm64" ]; then
+      npm install "@anthropic-ai/claude-code-darwin-arm64@$version" $npm_flags --force 2>&1 || true
+    fi
     cp -r node_modules "$version_dir/"
     mkdir -p "$version_dir/bin"
-    ln -sf "../node_modules/@anthropic-ai/claude-code/cli.js" "$version_dir/bin/claude"
+
+    # New versions (>=2.1.150) use native binary distribution
+    local claude_pkg_dir="$version_dir/node_modules/@anthropic-ai/claude-code"
+    if [ -f "$claude_pkg_dir/install.cjs" ] && [ ! -f "$claude_pkg_dir/cli.js" ]; then
+      # Run postinstall to place native binary into bin/claude.exe
+      (cd "$version_dir" && node "$claude_pkg_dir/install.cjs" 2>&1) || true
+      # Link to the native binary (bin/claude.exe after postinstall)
+      if [ -f "$claude_pkg_dir/bin/claude.exe" ] && [ "$(wc -c < "$claude_pkg_dir/bin/claude.exe")" -gt 4096 ]; then
+        ln -sf "../node_modules/@anthropic-ai/claude-code/bin/claude.exe" "$version_dir/bin/claude"
+      else
+        # Fallback: link directly to platform-specific binary
+        local platform_pkg=""
+        local effective_arch=$(uname -m)
+        # Prefer arm64 binary on Rosetta (x64 binary requires AVX)
+        if [ "$real_arch" = "arm64" ]; then
+          effective_arch="arm64"
+        fi
+        case "$(uname -s)-${effective_arch}" in
+          Darwin-arm64) platform_pkg="claude-code-darwin-arm64" ;;
+          Darwin-x86_64) platform_pkg="claude-code-darwin-x64" ;;
+          Linux-x86_64) platform_pkg="claude-code-linux-x64" ;;
+          Linux-aarch64) platform_pkg="claude-code-linux-arm64" ;;
+        esac
+        if [ -n "$platform_pkg" ] && [ -f "$version_dir/node_modules/@anthropic-ai/$platform_pkg/claude" ]; then
+          ln -sf "../node_modules/@anthropic-ai/$platform_pkg/claude" "$version_dir/bin/claude"
+        else
+          cvm_error "Failed to locate claude binary for this platform"
+          rm -rf "$version_dir"
+          trap - EXIT INT TERM
+          cd - > /dev/null
+          rm -rf "$temp_dir"
+          return 1
+        fi
+      fi
+    else
+      # Legacy versions use cli.js
+      ln -sf "../node_modules/@anthropic-ai/claude-code/cli.js" "$version_dir/bin/claude"
+    fi
     chmod +x "$version_dir/bin/claude"
 
     cvm_echo "Successfully installed Claude CLI $version"
